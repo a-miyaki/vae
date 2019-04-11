@@ -1,6 +1,6 @@
+from __future__ import print_function
 import os
 import numpy as np
-from __future__ import print_function
 import argparse
 
 import torch
@@ -16,7 +16,7 @@ import pylab
 import matplotlib.pyplot as plt
 
 
-parser = argparse.ArgmentParser(description='VAE MNIST Example')
+parser = argparse.ArgumentParser(description='VAE MNIST Example')
 parser.add_argument('--batch_size', type=int, default=128, metavar='N',
                     help='input batch size for training (default=128)')
 parser.add_argument('--epochs', type=int, default=10, metavar='N',
@@ -33,6 +33,7 @@ args = parser.parse_args()
 
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 
+
 def make_directory(path):
     if not os.path.exists(path):
         os.mkdir(path)
@@ -42,17 +43,16 @@ make_directory('data')
 
 torch.manual_seed(args.seed)
 device = torch.device("cuda" if args.cuda else "cpu")
-print(device)
 kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
 
 train_loader = torch.utils.data.DataLoader(
-    datasets.MNIST('./data',train=True, download=True,
+    datasets.MNIST('./data', train=True, download=True,
                    transform=transforms.ToTensor()),
-    batch_size=batch_size, shuffle=True, **kwargs)
+    batch_size=args.batch_size, shuffle=True, **kwargs)
 test_loader = torch.utils.data.DataLoader(
     datasets.MNIST('./data', train=False,
                    transform=transforms.ToTensor()),
-    batch_size=batch_size, shuffle=True)
+    batch_size=args.batch_size, shuffle=True)
 
 
 class VAE(nn.Module):
@@ -117,7 +117,7 @@ def train(epoch):
         recon_batch, mu, logvar = model(data)
         loss = loss_function(recon_batch, data, mu, logvar)
         loss.backward()
-        train_loss += loss,item()
+        train_loss += loss.item()
         optimizer.step()
         """
         if batch_idx % args.log_interval == 0:
@@ -138,16 +138,16 @@ def test(epoch):
     test_loss = 0
     with torch.no_grad():
         for batch_idx, (data, _) in enumerate(test_loader):
-            data= data.to(device)
+            data = data.to(device)
             recon_batch, mu, logvar = model(data)
             test_loss += loss_function(recon_batch, data, mu, logvar).item()
             if epoch % 10 == 0:
                 # 10エポックごとに最初のminibatchの入力画像と復元画像を保存
                 if batch_idx == 0:
                     n = 8
-                    comparison = torch.cat([data[:n], recon_batch.view(batch_size, 1, 28, 28)[:n]])
+                    comparison = torch.cat([data[:n], recon_batch.view(args.batch_size, 1, 28, 28)[:n]])
                     save_image(comparison.data.cpu(),
-                               '{}/reconstruction_{}.png'.format(out_dir, epoch), nrow=n)
+                               '{}/reconstruction_{}.png'.format(args.out, epoch), nrow=n)
 
         test_loss /= len(test_loader.dataset)
 
@@ -155,15 +155,16 @@ def test(epoch):
 
 
 if __name__ == '__main__':
+    print(device)
     loss_list = []
     test_loss_list = []
-    for epoch in range(1, num_epochs + 1):
+    for epoch in range(1, args.epochs + 1):
         loss = train(epoch)
         test_loss = test(epoch)
 
         print('epoch [{}/{}], loss: {:.4f} test_loss: {:.4f}'.format(
             epoch,
-            num_epochs,
+            args.epochs,
             loss,
             test_loss))
 
@@ -171,20 +172,20 @@ if __name__ == '__main__':
         loss_list.append(loss)
         test_loss_list.append(test_loss)
 
-    np.save(out_dir + '/loss_list.npz', np.array(loss_list))
-    np.save(out_dir + '/test_loss_list.npz', np.array(test_loss_list))
-    torch.save(model.state_dict(), out_dir + '/vae.pth')
+    np.save(args.out + '/loss_list.npz', np.array(loss_list))
+    np.save(args.out + '/test_loss_list.npz', np.array(test_loss_list))
+    torch.save(model.state_dict(), args.out + '/vae.pth')
 
     # matplotlib inline
-    loss_list = np.load('{}/loss_list.npz'.format(out_dir))
-    test_loss_list = np.load('{}/test_loss_list.npz'.format(out_dir))
+    loss_list = np.load('{}/loss_list.npz'.format(args.out))
+    test_loss_list = np.load('{}/test_loss_list.npz'.format(args.out))
     plt.plot(loss_list, test_loss_list)
     plt.xlabel('epoch')
     plt.ylabel('loss')
     plt.grid()
     plt.show()
 
-    model.load_state_dict(torch.load('{}/vae.pth'.format(out_dir),
+    model.load_state_dict(torch.load('{}/vae.pth'.format(args.out),
                                      map_location=lambda storage,
                                      loc: storage))
     test_dataset = datasets.MNIST('./data', download=True, train=False, transform=transforms.ToTensor())
@@ -205,5 +206,3 @@ if __name__ == '__main__':
     plt.ylim((-6, 6))
     plt.grid()
     plt.show()
-
-
