@@ -179,7 +179,8 @@ if __name__ == '__main__':
     # matplotlib inline
     loss_list = np.load('{}/loss_list.npz'.format(args.out))
     test_loss_list = np.load('{}/test_loss_list.npz'.format(args.out))
-    plt.plot(loss_list, test_loss_list)
+    plt.plot(loss_list)
+    plt.plot(test_loss_list)
     plt.xlabel('epoch')
     plt.ylabel('loss')
     plt.grid()
