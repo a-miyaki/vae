@@ -186,9 +186,10 @@ if __name__ == '__main__':
     plt.grid()
     plt.show()
 
+    device = torch.device('cpu')
+    model = VAE()
     model.load_state_dict(torch.load('{}/vae.pth'.format(args.out),
-                                     map_location=lambda storage,
-                                     loc: storage))
+                                     map_location=device))
     test_dataset = datasets.MNIST('./data', download=True, train=False, transform=transforms.ToTensor())
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=10000, shuffle=False)
     images, labels = iter(test_loader).next()
