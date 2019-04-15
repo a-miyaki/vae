@@ -2,6 +2,10 @@
 vae script
 
 2019/04/15
-VAE_main.py
-line 198 : z = model.encode(Variable(images, volatile=True) 
-error
+data:MNIST
+VAE
+pick up MNIST characterization
+
+I'll try:
+my dataset,
+z = 20,multivariate analyze
