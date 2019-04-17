@@ -11,7 +11,7 @@ my dataset,
 z = 20,multivariate analyze
 
 
-Reference
+# Reference
 
 http://aidiary.hatenablog.com/entry/20180228/1519828344
 https://github.com/pytorch/examples/blob/master/vae/main.py
