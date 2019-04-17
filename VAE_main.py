@@ -172,13 +172,13 @@ if __name__ == '__main__':
         loss_list.append(loss)
         test_loss_list.append(test_loss)
 
-    np.save(args.out + '/loss_list.npz', np.array(loss_list))
-    np.save(args.out + '/test_loss_list.npz', np.array(test_loss_list))
+    np.save(args.out + '/loss_list.npy', np.array(loss_list))
+    np.save(args.out + '/test_loss_list.npy', np.array(test_loss_list))
     torch.save(model.state_dict(), args.out + '/vae.pth')
 
     # matplotlib inline
-    loss_list = np.load('{}/loss_list.npz'.format(args.out))
-    test_loss_list = np.load('{}/test_loss_list.npz'.format(args.out))
+    loss_list = np.load('{}/loss_list.npy'.format(args.out))
+    test_loss_list = np.load('{}/test_loss_list.npy'.format(args.out))
     plt.plot(loss_list)
     plt.plot(test_loss_list)
     plt.xlabel('epoch')
