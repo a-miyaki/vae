@@ -87,7 +87,7 @@ class VAE(nn.Module):
         return torch.sigmoid(self.fc4(h3))
 
     def forward(self, x):
-        mu, logvar = self.encode(x.view(-1, 784))
+        mu, logvar = self.encode(x.view(-1, 16384))
         z = self.reparameterize(mu, logvar)
         return self.decode(z), mu, logvar
 
@@ -98,7 +98,7 @@ optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
 # Reconstruction + KL divergence losses summed over all elements and batch
 def loss_function(recon_x, x, mu, logvar):
-    BCE = F.binary_cross_entropy(recon_x, x.view(-1, 784), reduction='sum')
+    BCE = F.binary_cross_entropy(recon_x, x.view(-1, 16384), reduction='sum')
 
     # see Appendix B from VAE paper:
     # Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
@@ -141,9 +141,9 @@ def test(epoch):
             if batch_idx == 0:
                 n = 8
                 comparison = torch.cat([data[:n],
-                                        recon_batch.view(batch_size, 3, 128, 128)[:n]])
+                                        recon_batch.view(args.batch_size, 3, 128, 128)[:n]])
                 save_image(comparison.data.cpu(),
-                           '{}/reconstruction_{}.png'.format(out_dir, epoch), nrow=n)
+                           '{}/reconstruction_{}.png'.format(args.out, epoch), nrow=n)
 
     test_loss /= len(testdata_loader.dataset)
 
@@ -180,8 +180,7 @@ if __name__ == '__main__':
 
 	device = torch.device('cpu')
 	model = VAE()
-	model.load_state_dict(torch.load('{}/cell_vae.pth'.format(args.out),
-				 map_location=device))
+	model.load_state_dict(torch.load('{}/cell_vae.pth'.format(args.out), map_location=device))
 	cell_testdata = datasets.ImageFolder(root=args.val, transform=test_transform)
 	testdata_loader = torch.utils.data.DataLoader(cell_testdata, batch_size=len(testdata_loader.dataset), shuffle=False)
 	images, labels = iter(test_loader).next()
