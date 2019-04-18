@@ -157,17 +157,17 @@ if __name__ == '__main__':
 	for epoch in range(1, args.epochs + 1)
 		loss = train(epoch)
 		test_loss = test(epoch)
-		
+
 		print('epoch [ {} / {} ], loss:{:.4f}, test_loss:{:.4f}'.format(
 			epoch, args.epochs, loss, test_loss))
-		
+
 		loss_list.append(loss)
 		test_loss_list.append(test_loss)
-	
+
 	np.save(args.out + '/loss_list.npy', np.array(loss_list))
 	np.save(args.out + '/test_loss_list.npy', np.array(test_loss_list))
 	torch.save(model.state_dict(), args.out + '/cell_vae.pth')
-	
+
 	# matplotlib
 	loss_list = np.load('{}/loss_list.npy'.format(args.out))
 	loss_list = np.load('{}/test_loss_list.npy'.format(args.out))
@@ -177,11 +177,11 @@ if __name__ == '__main__':
 	plt.xlabel('epoch')
 	plt.ylabel('loss')
 	plt.grid()
-	
+
 	device = torch.device('cpu')
 	model = VAE()
 	model.load_state_dict(torch.load('{}/cell_vae.pth'.format(args.out),
-                                 map_location=device))
+				 map_location=device))
 	cell_testdata = datasets.ImageFolder(root=args.val, transform=test_transform)
 	testdata_loader = torch.utils.data.DataLoader(cell_testdata, batch_size=len(testdata_loader.dataset), shuffle=False)
 	images, labels = iter(test_loader).next()
@@ -194,8 +194,10 @@ if __name__ == '__main__':
 	print(mu.shape, logvar.shape)
 
 	plt.figure(figsize=(7, 7))
+	plt.title('Feature space')
 	plt.scatter(mu[:, 0], mu[:, 1], marker='.', c=labels.numpy(), cmap=pylab.cm.jet)
 	plt.colorbar()
 	plt.xlim((-6, 6))
 	plt.ylim((-6, 6))
 	plt.grid()
+	plt.show()
