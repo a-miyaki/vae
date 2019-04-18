@@ -67,11 +67,11 @@ class VAE(nn.Module):
     def __init__(self):
         super(VAE, self).__init__()
 
-        self.fc1 = nn.Linear(784, 400)
-        self.fc21 = nn.Linear(400, 20)
-        self.fc22 = nn.Linear(400, 20)
-        self.fc3 = nn.Linear(20, 400)
-        self.fc4 = nn.Linear(400, 784)
+        self.fc1 = nn.Linear(16384, 512)
+        self.fc21 = nn.Linear(512, 2)
+        self.fc22 = nn.Linear(512, 2)
+        self.fc3 = nn.Linear(2, 512)
+        self.fc4 = nn.Linear(512, 16384)
 
     def encode(self, x):
         h1 = F.relu(self.fc1(x))
@@ -121,7 +121,7 @@ def train(epoch):
         train_loss += loss.item()
         optimizer.step()
 
-	train_loss /= len(test_loader.dataset)
+	train_loss /= len(dataset_loader.dataset)
 	return train_loss
 
 def test(epoch):
@@ -141,11 +141,61 @@ def test(epoch):
             if batch_idx == 0:
                 n = 8
                 comparison = torch.cat([data[:n],
-                                        recon_batch.view(batch_size, 1, 28, 28)[:n]])
+                                        recon_batch.view(batch_size, 3, 128, 128)[:n]])
                 save_image(comparison.data.cpu(),
                            '{}/reconstruction_{}.png'.format(out_dir, epoch), nrow=n)
 
-    test_loss /= len(test_loader.dataset)
+    test_loss /= len(testdata_loader.dataset)
 
     return test_loss
 
+
+if __name__ == '__main__':
+	print(device)
+	loss_list = []
+	test_loss_list = []
+	for epoch in range(1, args.epochs + 1)
+		loss = train(epoch)
+		test_loss = test(epoch)
+		
+		print('epoch [ {} / {} ], loss:{:.4f}, test_loss:{:.4f}'.format(
+			epoch, args.epochs, loss, test_loss))
+		
+		loss_list.append(loss)
+		test_loss_list.append(test_loss)
+	
+	np.save(args.out + '/loss_list.npy', np.array(loss_list))
+	np.save(args.out + '/test_loss_list.npy', np.array(test_loss_list))
+	torch.save(model.state_dict(), args.out + '/cell_vae.pth')
+	
+	# matplotlib
+	loss_list = np.load('{}/loss_list.npy'.format(args.out))
+	loss_list = np.load('{}/test_loss_list.npy'.format(args.out))
+	plt.plot(loss_list)
+	plt.plot(test_loss_list)
+	plt.title('learning_curve')
+	plt.xlabel('epoch')
+	plt.ylabel('loss')
+	plt.grid()
+	
+	device = torch.device('cpu')
+	model = VAE()
+	model.load_state_dict(torch.load('{}/cell_vae.pth'.format(args.out),
+                                 map_location=device))
+	cell_testdata = datasets.ImageFolder(root=args.val, transform=test_transform)
+	testdata_loader = torch.utils.data.DataLoader(cell_testdata, batch_size=len(testdata_loader.dataset), shuffle=False)
+	images, labels = iter(test_loader).next()
+	images = images.view(len(testdata_loader.dataset), -1)
+
+	# 784次元ベクトルを2次元ベクトルにencode
+	z = model.encode(Variable(images, volatile=True))
+	mu, logvar = z
+	mu, logvar = mu.data.numpy(), logvar.data.numpy()
+	print(mu.shape, logvar.shape)
+
+	plt.figure(figsize=(7, 7))
+	plt.scatter(mu[:, 0], mu[:, 1], marker='.', c=labels.numpy(), cmap=pylab.cm.jet)
+	plt.colorbar()
+	plt.xlim((-6, 6))
+	plt.ylim((-6, 6))
+	plt.grid()
