@@ -122,7 +122,30 @@ def train(epoch):
         optimizer.step()
 
 	train_loss /= len(test_loader.dataset)
+	return train_loss
 
+def test(epoch):
+    model.eval()
+    test_loss = 0
+    for batch_idx, (data, _) in enumerate(test_loader):
+        if cuda:
+            data = Variable(data.cuda(), volatile=True)
+        else:
+            data = Variable(data, volatile=True)
+        recon_batch, mu, logvar = model(data)
+        loss = loss_function(recon_batch, data, mu, logvar)
+        test_loss += loss.data[0]
+        
+        if epoch % 10 == 0:
+            # 10エポックごとに最初のminibatchの入力画像と復元画像を保存
+            if batch_idx == 0:
+                n = 8
+                comparison = torch.cat([data[:n],
+                                        recon_batch.view(batch_size, 1, 28, 28)[:n]])
+                save_image(comparison.data.cpu(),
+                           '{}/reconstruction_{}.png'.format(out_dir, epoch), nrow=n)
 
+    test_loss /= len(test_loader.dataset)
 
+    return test_loss
 
