@@ -20,8 +20,8 @@ import matplotlib.pylab as plt
 
 
 parser = argparse.ArgumentParser(description='Capture cell features')
-parser.add_argument('--batch_size', type=int, default=4, metavar='N',
-                    help='input batch size for training (default=4)')
+parser.add_argument('--batch_size', type=int, default=100, metavar='N',
+                    help='input batch size for training (default=100)')
 parser.add_argument('--epochs', type=int, default=100, metavar='N',
                     help='number of epochs to train (default=100)')
 parser.add_argument('----no_cuda', action='store_true', default=False,
@@ -48,11 +48,11 @@ device = torch.device("cuda" if args.cuda else "cpu")
 kwargs = {'num_workers' : 1, 'pin_memory' : True} if args.cuda else{}
 
 data_transform = transforms.Compose([
-	transforms.RandomCrop(128),
+	transforms.Resize((28, 28)),
 	transforms.ToTensor()
 ])
 test_transform = transforms.Compose([
-	transforms.CenterCrop(128),
+	transforms.Resize((28, 28)),
 	transforms.ToTensor()
 ])
 
@@ -67,11 +67,11 @@ class VAE(nn.Module):
     def __init__(self):
         super(VAE, self).__init__()
 
-        self.fc1 = nn.Linear(16384, 512)
-        self.fc21 = nn.Linear(512, 2)
-        self.fc22 = nn.Linear(512, 2)
-        self.fc3 = nn.Linear(2, 512)
-        self.fc4 = nn.Linear(512, 16384)
+        self.fc1 = nn.Linear(784, 400)
+        self.fc21 = nn.Linear(400, 2)
+        self.fc22 = nn.Linear(400, 2)
+        self.fc3 = nn.Linear(2, 400)
+        self.fc4 = nn.Linear(400, 784)
 
     def encode(self, x):
         h1 = F.relu(self.fc1(x))
@@ -87,7 +87,7 @@ class VAE(nn.Module):
         return torch.sigmoid(self.fc4(h3))
 
     def forward(self, x):
-        mu, logvar = self.encode(x.view(-1, 16384))
+        mu, logvar = self.encode(x.view(-1, 784))
         z = self.reparameterize(mu, logvar)
         return self.decode(z), mu, logvar
 
@@ -98,7 +98,7 @@ optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
 # Reconstruction + KL divergence losses summed over all elements and batch
 def loss_function(recon_x, x, mu, logvar):
-    BCE = F.binary_cross_entropy(recon_x, x.view(-1, 16384), reduction='sum')
+    BCE = F.binary_cross_entropy(recon_x, x.view(-1, 784), reduction='sum')
 
     # see Appendix B from VAE paper:
     # Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
@@ -141,7 +141,7 @@ def test(epoch):
             if batch_idx == 0:
                 n = 8
                 comparison = torch.cat([data[:n],
-                                        recon_batch.view(args.batch_size, 3, 128, 128)[:n]])
+                                        recon_batch.view(args.batch_size, 3, 28, 28)[:n]])
                 save_image(comparison.data.cpu(),
                            '{}/reconstruction_{}.png'.format(args.out, epoch), nrow=n)
 
