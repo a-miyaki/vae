@@ -141,7 +141,7 @@ def test(epoch):
             if batch_idx == 0:
                 n = 8
                 comparison = torch.cat([data[:n],
-                                        recon_batch.view(args.batch_size, 3, 28, 28)[:n]])
+                                        recon_batch.view(args.batch_size, 1, 28, 28)[:n]])
                 save_image(comparison.data.cpu(),
                            '{}/reconstruction_{}.png'.format(args.out, epoch), nrow=n)
 
