@@ -20,43 +20,37 @@ import matplotlib.pylab as plt
 
 
 parser = argparse.ArgumentParser(description='Capture cell features')
-parser.add_argument('--batch_size', type=int, default=100, metavar='N',
-                    help='input batch size for training (default=100)')
+parser.add_argument('--batch_size', type=int, default=128, metavar='N',
+                    help='input batch size for training (default=128)')
 parser.add_argument('--epochs', type=int, default=100, metavar='N',
                     help='number of epochs to train (default=100)')
 parser.add_argument('----no_cuda', action='store_true', default=False,
                     help='enables CUDA training')
-parser.add_argument('--datasets', '-d', default='./train',
+parser.add_argument('--datasets', '-d', default='./traindata',
                     help='datasets directory(./train/Hela/h0001.jpg)')
-parser.add_argument('--val', '-v', default='./val',
-					help='Directory to validation')
+parser.add_argument('--val', '-v', default='./testdata',
+                    help='Directory to validation')
 parser.add_argument('--out', '-o', default='./result_190417',
                     help='Directory to output the result')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default=1)')
-parser.add_argument('log_interval' type=int, default=10, metavar='N'
+parser.add_argument('--log_interval', type=int, default=10, metavar='N',
                     help='How many batches to wait before logging training status')
 args = parser.parse_args()
 
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 
-if not os.path.exisits(args.out):
+if not os.path.exists(args.out):
     os.mkdir(args.out)
 
-torch.mamual_seed(args.seed)
+torch.manual_seed(args.seed)
 device = torch.device("cuda" if args.cuda else "cpu")
 kwargs = {'num_workers' : 1, 'pin_memory' : True} if args.cuda else{}
 
-data_transform = transforms.Compose([
-	transforms.Resize((28, 28)),
-	transforms.ToTensor()
-])
-test_transform = transforms.Compose([
-	transforms.Resize((28, 28)),
-	transforms.ToTensor()
-])
+data_transform = transforms.Compose([transforms.Resize((28, 28)), transforms.ToTensor()])
+test_transform = transforms.Compose([transforms.Resize((28, 28)), transforms.ToTensor()])
 
-cell_dataset = datasets.ImageFolder(root=args.datasets,transform=data_transform)
+cell_dataset = datasets.ImageFolder(root=args.datasets, transform=data_transform)
 dataset_loader = torch.utils.data.DataLoader(cell_dataset, batch_size=args.batch_size, shuffle=True, **kwargs)
 
 cell_testdata = datasets.ImageFolder(root=args.val, transform=test_transform)
@@ -112,7 +106,7 @@ def loss_function(recon_x, x, mu, logvar):
 def train(epoch):
     model.train()
     train_loss = 0
-    for batch_idx, (data, _) in enumerate(train_loader):
+    for batch_idx, (data, _) in enumerate(dataset_loader):
         data = data.to(device)
         optimizer.zero_grad()
         recon_batch, mu, logvar = model(data)
@@ -121,82 +115,76 @@ def train(epoch):
         train_loss += loss.item()
         optimizer.step()
 
-	train_loss /= len(dataset_loader.dataset)
-	return train_loss
+    train_loss /= len(dataset_loader.dataset)
+    return train_loss
 
 def test(epoch):
     model.eval()
     test_loss = 0
-    for batch_idx, (data, _) in enumerate(test_loader):
-        if cuda:
-            data = Variable(data.cuda(), volatile=True)
-        else:
-            data = Variable(data, volatile=True)
+    for batch_idx, (data, _) in enumerate(testdata_loader):
+        data = data.to(device)
         recon_batch, mu, logvar = model(data)
-        loss = loss_function(recon_batch, data, mu, logvar)
-        test_loss += loss.data[0]
-        
+        test_loss += loss_function(recon_batch, data, mu, logvar).item()
+        """
         if epoch % 10 == 0:
             # 10エポックごとに最初のminibatchの入力画像と復元画像を保存
             if batch_idx == 0:
                 n = 8
-                comparison = torch.cat([data[:n],
-                                        recon_batch.view(args.batch_size, 1, 28, 28)[:n]])
+                comparison = torch.cat([data[:n], recon_batch.view(args.batch_size, 1, 28, 28)[:n]])
                 save_image(comparison.data.cpu(),
                            '{}/reconstruction_{}.png'.format(args.out, epoch), nrow=n)
-
+        """
     test_loss /= len(testdata_loader.dataset)
 
     return test_loss
 
 
 if __name__ == '__main__':
-	print(device)
-	loss_list = []
-	test_loss_list = []
-	for epoch in range(1, args.epochs + 1)
-		loss = train(epoch)
-		test_loss = test(epoch)
+    print(device)
+    loss_list = []
+    test_loss_list = []
+    for epoch in range(1, args.epochs + 1):
+        loss = train(epoch)
+        test_loss = test(epoch)
 
-		print('epoch [ {} / {} ], loss:{:.4f}, test_loss:{:.4f}'.format(
-			epoch, args.epochs, loss, test_loss))
+        print('epoch [ {} / {} ], loss:{:.4f}, test_loss:{:.4f}'.format(epoch, args.epochs, loss, test_loss))
 
-		loss_list.append(loss)
-		test_loss_list.append(test_loss)
+        loss_list.append(loss)
+        test_loss_list.append(test_loss)
 
-	np.save(args.out + '/loss_list.npy', np.array(loss_list))
-	np.save(args.out + '/test_loss_list.npy', np.array(test_loss_list))
-	torch.save(model.state_dict(), args.out + '/cell_vae.pth')
+    np.save(args.out + '/loss_list.npy', np.array(loss_list))
+    np.save(args.out + '/test_loss_list.npy', np.array(test_loss_list))
+    torch.save(model.state_dict(), args.out + '/cell_vae.pth')
 
-	# matplotlib
-	loss_list = np.load('{}/loss_list.npy'.format(args.out))
-	loss_list = np.load('{}/test_loss_list.npy'.format(args.out))
-	plt.plot(loss_list)
-	plt.plot(test_loss_list)
-	plt.title('learning_curve')
-	plt.xlabel('epoch')
-	plt.ylabel('loss')
-	plt.grid()
+    # matplotlib
+    loss_list = np.load('{}/loss_list.npy'.format(args.out))
+    test_loss_list = np.load('{}/test_loss_list.npy'.format(args.out))
+    plt.plot(loss_list)
+    plt.plot(test_loss_list)
+    plt.title('learning_curve')
+    plt.xlabel('epoch')
+    plt.ylabel('loss')
+    plt.grid()
 
-	device = torch.device('cpu')
-	model = VAE()
-	model.load_state_dict(torch.load('{}/cell_vae.pth'.format(args.out), map_location=device))
-	cell_testdata = datasets.ImageFolder(root=args.val, transform=test_transform)
-	testdata_loader = torch.utils.data.DataLoader(cell_testdata, batch_size=len(testdata_loader.dataset), shuffle=False)
-	images, labels = iter(test_loader).next()
-	images = images.view(len(testdata_loader.dataset), -1)
+    device = torch.device('cpu')
+    model = VAE()
+    model.load_state_dict(torch.load('{}/cell_vae.pth'.format(args.out), map_location=device))
+    cell_testdata = datasets.ImageFolder(root=args.val, transform=test_transform)
+    testdata_loader = torch.utils.data.DataLoader(cell_testdata, batch_size=len(testdata_loader.dataset), shuffle=False)
+    images, labels = iter(testdata_loader).next()
+    images = images.view(len(testdata_loader.dataset), -1)
 
-	# 784次元ベクトルを2次元ベクトルにencode
-	z = model.encode(Variable(images, volatile=True))
-	mu, logvar = z
-	mu, logvar = mu.data.numpy(), logvar.data.numpy()
-	print(mu.shape, logvar.shape)
+    # 784次元ベクトルを2次元ベクトルにencode
+    z = model.encode(Variable(images, volatile=True))
+    mu, logvar = z
+    mu, logvar = mu.data.numpy(), logvar.data.numpy()
+    print(mu.shape, logvar.shape)
 
-	plt.figure(figsize=(7, 7))
-	plt.title('Feature space')
-	plt.scatter(mu[:, 0], mu[:, 1], marker='.', c=labels.numpy(), cmap=pylab.cm.jet)
-	plt.colorbar()
-	plt.xlim((-6, 6))
-	plt.ylim((-6, 6))
-	plt.grid()
-	plt.show()
+    plt.figure(figsize=(7, 7))
+    plt.title('Feature space')
+    plt.scatter(mu[:, 0], mu[:, 1], marker='.', c=labels.numpy(), cmap=pylab.cm.jet)
+    plt.colorbar()
+    plt.xlim((-6, 6))
+    plt.ylim((-6, 6))
+    plt.grid()
+    plt.show()
