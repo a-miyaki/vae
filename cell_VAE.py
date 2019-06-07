@@ -9,7 +9,7 @@ import torch.utils.data
 import torch.optim as optim
 import torchvision
 from torch.autograd import Variable
-from torch.nn import functional as H
+from torch.nn import functional as F
 from torchvision import datasets, transforms
 from torchvision.utils import save_image
 
@@ -53,6 +53,8 @@ dataset_loader = torch.utils.data.DataLoader(cell_dataset, batch_size=args.batch
 cell_testdata = datasets.ImageFolder(root=args.val, transform=data_transform)
 testdata_loader = torch.utils.data.DataLoader(cell_testdata, batch_size=args.batch_size, shuffle=True)
 
+classes = ('HEK293', 'KYSE150', 'MCF-7')
+
 
 class VAE(nn.Module):
     def __init__(self):
@@ -63,6 +65,9 @@ class VAE(nn.Module):
         self.fc22 = nn.Linear(400, 2)
         self.fc3 = nn.Linear(2, 400)
         self.fc4 = nn.Linear(400, 784)
+        
+        self.relu = nn.ReLU()
+        self.sigmoid = nn.Sigmoid()
 
     def encode(self, x):
         h1 = F.relu(self.fc1(x))
