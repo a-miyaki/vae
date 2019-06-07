@@ -1,7 +1,6 @@
 from __future__ import print_function
 import os
 import numpy
-import sys
 import argparse
 
 import torch
@@ -13,7 +12,6 @@ from torch.autograd import Variable
 from torch.nn import functional as H
 from torchvision import datasets, transforms
 from torchvision.utils import save_image
-from torch.utils.data import Dataset
 
 import pylab
 import matplotlib.pylab as plt
@@ -45,15 +43,14 @@ if not os.path.exists(args.out):
 
 torch.manual_seed(args.seed)
 device = torch.device("cuda" if args.cuda else "cpu")
-kwargs = {'num_workers' : 1, 'pin_memory' : True} if args.cuda else{}
+kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else{}
 
-data_transform = transforms.Compose([transforms.Resize((28, 28)), transforms.ToTensor()])
-test_transform = transforms.Compose([transforms.Resize((28, 28)), transforms.ToTensor()])
+data_transform = transforms.Compose([transforms.Resize((28, 28)), transforms.Grayscale(), transforms.ToTensor()])
 
 cell_dataset = datasets.ImageFolder(root=args.datasets, transform=data_transform)
 dataset_loader = torch.utils.data.DataLoader(cell_dataset, batch_size=args.batch_size, shuffle=True, **kwargs)
 
-cell_testdata = datasets.ImageFolder(root=args.val, transform=test_transform)
+cell_testdata = datasets.ImageFolder(root=args.val, transform=data_transform)
 testdata_loader = torch.utils.data.DataLoader(cell_testdata, batch_size=args.batch_size, shuffle=True)
 
 
@@ -81,6 +78,7 @@ class VAE(nn.Module):
         return torch.sigmoid(self.fc4(h3))
 
     def forward(self, x):
+        # print(x.size()) #out = (batchsize, channel, width, length)
         mu, logvar = self.encode(x.view(-1, 784))
         z = self.reparameterize(mu, logvar)
         return self.decode(z), mu, logvar
@@ -125,7 +123,6 @@ def test(epoch):
         data = data.to(device)
         recon_batch, mu, logvar = model(data)
         test_loss += loss_function(recon_batch, data, mu, logvar).item()
-        """
         if epoch % 10 == 0:
             # 10エポックごとに最初のminibatchの入力画像と復元画像を保存
             if batch_idx == 0:
@@ -133,7 +130,6 @@ def test(epoch):
                 comparison = torch.cat([data[:n], recon_batch.view(args.batch_size, 1, 28, 28)[:n]])
                 save_image(comparison.data.cpu(),
                            '{}/reconstruction_{}.png'.format(args.out, epoch), nrow=n)
-        """
     test_loss /= len(testdata_loader.dataset)
 
     return test_loss
@@ -169,13 +165,14 @@ if __name__ == '__main__':
     device = torch.device('cpu')
     model = VAE()
     model.load_state_dict(torch.load('{}/cell_vae.pth'.format(args.out), map_location=device))
-    cell_testdata = datasets.ImageFolder(root=args.val, transform=test_transform)
+    cell_testdata = datasets.ImageFolder(root=args.val, transform=data_transform)
     testdata_loader = torch.utils.data.DataLoader(cell_testdata, batch_size=len(testdata_loader.dataset), shuffle=False)
     images, labels = iter(testdata_loader).next()
     images = images.view(len(testdata_loader.dataset), -1)
 
     # 784次元ベクトルを2次元ベクトルにencode
-    z = model.encode(Variable(images, volatile=True))
+    with torch.no_grad():
+        z = model.encode(Variable(images))
     mu, logvar = z
     mu, logvar = mu.data.numpy(), logvar.data.numpy()
     print(mu.shape, logvar.shape)
