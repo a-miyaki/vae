@@ -172,23 +172,21 @@ if __name__ == '__main__':
     model = VAE()
     model.load_state_dict(torch.load('{}/cell_vae.pth'.format(args.out), map_location=device))
     
+    cell_testdata = datasets.ImageFolder(root=args.val, transform=data_transform)
+    testdata_loader = torch.utils.data.DataLoader(cell_testdata, batch_size=len(testdata_loader.dataset), shuffle=False)
+    images, labels = iter(testdata_loader).next()
+    images = images.view(len(testdata_loader.dataset), -1)
+
+    # 784次元ベクトルを2次元ベクトルにencode
+    with torch.no_grad():
+        z = model.encode(Variable(images))
+    mu, logvar = z
+    mu, logvar = mu.data.numpy(), logvar.data.numpy()
+    print(mu.shape, logvar.shape)
+    plt.scatter(mu[:, 0], mu[:, 1], marker='.', c=labels.numpy(), cmap=pylab.cm.jet)
+        
     plt.figure(figsize=(7, 7))
     plt.title('Feature space')
-    for name, item in enumerate(cell_list):
-        dir = args.val + "/" + str(name)
-        cell_testdata = datasets.ImageFolder(root=dir, transform=data_transform)
-        testdata_loader = torch.utils.data.DataLoader(cell_testdata, batch_size=len(testdata_loader.dataset), shuffle=False)
-        images, labels = iter(testdata_loader).next()
-        images = images.view(len(testdata_loader.dataset), -1)
-
-        # 784次元ベクトルを2次元ベクトルにencode
-        with torch.no_grad():
-            z = model.encode(Variable(images))
-        mu, logvar = z
-        mu, logvar = mu.data.numpy(), logvar.data.numpy()
-        print(mu.shape, logvar.shape)
-        plt.scatter(mu[:, 0], mu[:, 1], marker='.', c=str(name), cmap=pylab.cm.jet)
-        
     plt.xlim((-6, 6))
     plt.ylim((-6, 6))
     plt.grid()
