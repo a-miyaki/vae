@@ -2,24 +2,23 @@ from __future__ import print_function
 import os
 import numpy
 import argparse
+from datetime import datetime
 
 import torch
 import torch.nn as nn
 import torch.utils.data
 import torch.optim as optim
-import torchvision
-from torch.autograd import Variable
 from torch.nn import functional as F
 from torchvision import datasets, transforms
 from torchvision.utils import save_image
 
-import pylab
 import matplotlib.pylab as plt
 
+result_dir = "./result_{}".format(datetime.now().strftime("%Y/%m/%d")
 
 parser = argparse.ArgumentParser(description='Capture cell features')
-parser.add_argument('--batch_size', type=int, default=128, metavar='N',
-                    help='input batch size for training (default=128)')
+parser.add_argument('--batch_size', type=int, default=10, metavar='N',
+                    help='input batch size for training (default=128# MINST)')
 parser.add_argument('--epochs', type=int, default=100, metavar='N',
                     help='number of epochs to train (default=100)')
 parser.add_argument('----no_cuda', action='store_true', default=False,
@@ -28,7 +27,7 @@ parser.add_argument('--datasets', '-d', default='./traindata',
                     help='datasets directory(./train/Hela/h0001.jpg)')
 parser.add_argument('--val', '-v', default='./testdata',
                     help='Directory to validation')
-parser.add_argument('--out', '-o', default='./result_190417',
+parser.add_argument('--out', '-o', default=result_dir,
                     help='Directory to output the result')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default=1)')
@@ -45,7 +44,7 @@ torch.manual_seed(args.seed)
 device = torch.device("cuda" if args.cuda else "cpu")
 kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else{}
 
-data_transform = transforms.Compose([transforms.Resize((28, 28)), transforms.Grayscale(), transforms.ToTensor()])
+data_transform = transforms.Compose([transforms.Grayscale(), transforms.ToTensor()])
 
 cell_dataset = datasets.ImageFolder(root=args.datasets, transform=data_transform)
 dataset_loader = torch.utils.data.DataLoader(cell_dataset, batch_size=args.batch_size, shuffle=True, **kwargs)
@@ -60,31 +59,40 @@ class VAE(nn.Module):
     def __init__(self):
         super(VAE, self).__init__()
 
-        self.fc1 = nn.Linear(784, 400)
-        self.fc21 = nn.Linear(400, 2)
-        self.fc22 = nn.Linear(400, 2)
-        self.fc3 = nn.Linear(2, 400)
-        self.fc4 = nn.Linear(400, 784)
-        
-        self.relu = nn.ReLU()
-        self.sigmoid = nn.Sigmoid()
+        self.conv1 = nn.Conv2d(in_channels=1, out_channels=32, kernel_size=3, stride=1, padding=0)
+        self.conv2 = nn.Conv2d(32, 16, 3)
+        self.max_pool = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.fc1_mu = nn.Linear(68 * 68 * 16, 20)
+        self.fc1_logvar = nn.Linear(68 * 68 * 16, 20)
+        self.fc2 = nn.Linear(20, 68 * 68 * 16)
+        self.up_sample = nn.UpsamplingNearest2d(size=(140, 140), scale_factor=2)
+        self.conv3 = nn.ConvTranspose2d(16, 32, 3)
+        self.conv4 = nn.ConvTranspose2d(32, 1, 3)
 
     def encode(self, x):
-        h1 = F.relu(self.fc1(x))
-        return self.fc21(h1), self.fc22(h1)
-
-    def reparameterize(self, mu, logvar):
-        std = torch.exp(0.5*logvar)
-        eps = torch.randn_like(std)
-        return mu + eps*std
+        a1 = F.relu(self.conv1(x))
+        a2 = F.relu(self.conv2(a1))
+        mx_poold = self.max_pool(a2)
+        a_reshaped = mx_poold.reshape(-1, 68 * 68 * 16)
+        a_mu = self.fc1_mu(a_reshaped)
+        a_logvar = self.fc1_logvar(a_reshaped)
+        return a_mu, a_logvar
 
     def decode(self, z):
-        h3 = F.relu(self.fc3(z))
-        return torch.sigmoid(self.fc4(h3))
+        a3 = F.relu(self.fc2(z))
+        a3 = a3.reshape(-1, 16, 68, 68)
+        a3_upsample = self.up_sample(a3)
+        a4 = F.relu(self.conv3(a3_upsample))
+        a5 = torch.sigmoid(self.conv4(a4))
+        return a5
+
+    def reparameterize(self, mu, logvar):
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        return eps.mul(std).add_(mu)
 
     def forward(self, x):
-        # print(x.size()) #out = (batchsize, channel, width, length)
-        mu, logvar = self.encode(x.view(-1, 784))
+        mu, logvar = self.encode(x)
         z = self.reparameterize(mu, logvar)
         return self.decode(z), mu, logvar
 
@@ -139,7 +147,16 @@ def test(epoch):
 
     return test_loss
 
-
+f = open(args.out + '/memo.txt', 'w')
+f.write(datetime.now().strftime("%Y/%m/%d  %H:%M:%S") + "\n"
+        "device : {}".format(device) + "\n"
+        "epoch : {}".format(args.epochs) + "\n"
+        "batch size : {}".format(args.batch_size) + "\n"
+        "image size : {} x {}".format(140, 140) + "\n"
+        "cells : {}, {}, {}".format("HEK293", "KYSE150", "MCF-7") + "\n"
+        "dataset : train;{}, test;{}".format(350, 50))
+f.close()
+                                  
 if __name__ == '__main__':
     print(device)
     loss_list = []
@@ -168,7 +185,7 @@ if __name__ == '__main__':
     plt.grid()
     plt.show()
 
-    device = torch.device('cpu')
+    """device = torch.device('cpu')
     model = VAE()
     model.load_state_dict(torch.load('{}/cell_vae.pth'.format(args.out), map_location=device))
     
@@ -190,4 +207,4 @@ if __name__ == '__main__':
     plt.xlim((-6, 6))
     plt.ylim((-6, 6))
     plt.grid()
-    plt.show()
+    plt.show()"""
