@@ -1,24 +1,28 @@
 from __future__ import print_function
 import os
-import numpy
+import numpy as np
 import argparse
 from datetime import datetime
+import time
 
 import torch
 import torch.nn as nn
 import torch.utils.data
 import torch.optim as optim
+import torchvision
+from torch.autograd import Variable
 from torch.nn import functional as F
 from torchvision import datasets, transforms
 from torchvision.utils import save_image
 
 import matplotlib.pylab as plt
 
-result_dir = "./result_{}".format(datetime.now().strftime("%Y/%m/%d")
+
+result_dir = "./result_cell_image/result_{}_2".format(datetime.now().strftime("%Y%m%d"))
 
 parser = argparse.ArgumentParser(description='Capture cell features')
 parser.add_argument('--batch_size', type=int, default=10, metavar='N',
-                    help='input batch size for training (default=128# MINST)')
+                    help='input batch size for training (default=5)')
 parser.add_argument('--epochs', type=int, default=100, metavar='N',
                     help='number of epochs to train (default=100)')
 parser.add_argument('----no_cuda', action='store_true', default=False,
@@ -42,6 +46,18 @@ if not os.path.exists(args.out):
 
 torch.manual_seed(args.seed)
 device = torch.device("cuda" if args.cuda else "cpu")
+
+f = open(args.out + '/memo.txt', 'w')
+f.write(datetime.now().strftime("%Y/%m/%d  %H:%M:%S") + "\n"
+        "device : {}".format(device) + "\n"
+        "epoch : {}".format(args.epochs) + "\n"
+        "batch size : {}".format(args.batch_size) + "\n"
+        "latent dimensions : 50\n"
+        "image size : {} x {}".format(140, 140) + "\n"
+        "cells : {}, {}, {}".format("HEK293", "KYSE150", "MCF-7") + "\n"
+        "dataset : train;{}, test;{}".format(240, 160))
+f.close()
+
 kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else{}
 
 data_transform = transforms.Compose([transforms.Grayscale(), transforms.ToTensor()])
@@ -52,7 +68,7 @@ dataset_loader = torch.utils.data.DataLoader(cell_dataset, batch_size=args.batch
 cell_testdata = datasets.ImageFolder(root=args.val, transform=data_transform)
 testdata_loader = torch.utils.data.DataLoader(cell_testdata, batch_size=args.batch_size, shuffle=True)
 
-cell_list = ["HEK293", "KYSE150", "MCF-7"]
+cell_list = ('HEK293', 'KYSE150', 'MCF7')
 
 
 class VAE(nn.Module):
@@ -60,31 +76,40 @@ class VAE(nn.Module):
         super(VAE, self).__init__()
 
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=32, kernel_size=3, stride=1, padding=0)
-        self.conv2 = nn.Conv2d(32, 16, 3)
+        self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=1, padding=1)
+        self.conv3 = nn.Conv2d(in_channels=64, out_channels=32, kernel_size=3, stride=1, padding=1)
+        self.conv4 = nn.Conv2d(in_channels=32, out_channels=16, kernel_size=3, stride=1, padding=0)
         self.max_pool = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.fc1_mu = nn.Linear(68 * 68 * 16, 20)
-        self.fc1_logvar = nn.Linear(68 * 68 * 16, 20)
-        self.fc2 = nn.Linear(20, 68 * 68 * 16)
-        self.up_sample = nn.UpsamplingNearest2d(size=(140, 140), scale_factor=2)
-        self.conv3 = nn.ConvTranspose2d(16, 32, 3)
-        self.conv4 = nn.ConvTranspose2d(32, 1, 3)
+        self.fc1_mu = nn.Linear(68 * 68 * 16, 50)
+        self.fc1_logvar = nn.Linear(68 * 68 * 16, 50)
+
+        self.fc2 = nn.Linear(50, 68 * 68 * 16)
+        self.up_sample = nn.UpsamplingNearest2d(scale_factor=2)
+        self.conv5 = nn.ConvTranspose2d(16, 32, 3)
+        self.conv6 = nn.ConvTranspose2d(in_channels=32, out_channels=64, kernel_size=3, stride=1, padding=1)
+        self.conv7 = nn.ConvTranspose2d(in_channels=64, out_channels=32, kernel_size=3, stride=1, padding=1)
+        self.conv8 = nn.ConvTranspose2d(32, 1, 3)
 
     def encode(self, x):
         a1 = F.relu(self.conv1(x))
         a2 = F.relu(self.conv2(a1))
-        mx_poold = self.max_pool(a2)
+        a3 = F.relu(self.conv3(a2))
+        a4 = F.relu(self.conv4(a3))
+        mx_poold = self.max_pool(a4)
         a_reshaped = mx_poold.reshape(-1, 68 * 68 * 16)
         a_mu = self.fc1_mu(a_reshaped)
         a_logvar = self.fc1_logvar(a_reshaped)
         return a_mu, a_logvar
 
     def decode(self, z):
-        a3 = F.relu(self.fc2(z))
-        a3 = a3.reshape(-1, 16, 68, 68)
-        a3_upsample = self.up_sample(a3)
-        a4 = F.relu(self.conv3(a3_upsample))
-        a5 = torch.sigmoid(self.conv4(a4))
-        return a5
+        a5 = F.relu(self.fc2(z))
+        a5 = a5.reshape(-1, 16, 68, 68)
+        a5_upsample = self.up_sample(a5)
+        a6 = F.relu(self.conv5(a5_upsample))
+        a7 = F.relu(self.conv6(a6))
+        a8 = F.relu(self.conv7(a7))
+        a9 = torch.sigmoid(self.conv8(a8))
+        return a9
 
     def reparameterize(self, mu, logvar):
         std = torch.exp(0.5 * logvar)
@@ -103,7 +128,7 @@ optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
 # Reconstruction + KL divergence losses summed over all elements and batch
 def loss_function(recon_x, x, mu, logvar):
-    BCE = F.binary_cross_entropy(recon_x, x.view(-1, 784), reduction='sum')
+    BCE = F.binary_cross_entropy(recon_x, x.view(-1, 19600), reduction='sum')
 
     # see Appendix B from VAE paper:
     # Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
@@ -140,32 +165,26 @@ def test(epoch):
             # 10エポックごとに最初のminibatchの入力画像と復元画像を保存
             if batch_idx == 0:
                 n = 8
-                comparison = torch.cat([data[:n], recon_batch.view(args.batch_size, 1, 28, 28)[:n]])
+                comparison = torch.cat([data[:n], recon_batch.view(args.batch_size, 1, 140, 140)[:n]])
                 save_image(comparison.data.cpu(),
                            '{}/reconstruction_{}.png'.format(args.out, epoch), nrow=n)
     test_loss /= len(testdata_loader.dataset)
 
     return test_loss
 
-f = open(args.out + '/memo.txt', 'w')
-f.write(datetime.now().strftime("%Y/%m/%d  %H:%M:%S") + "\n"
-        "device : {}".format(device) + "\n"
-        "epoch : {}".format(args.epochs) + "\n"
-        "batch size : {}".format(args.batch_size) + "\n"
-        "image size : {} x {}".format(140, 140) + "\n"
-        "cells : {}, {}, {}".format("HEK293", "KYSE150", "MCF-7") + "\n"
-        "dataset : train;{}, test;{}".format(350, 50))
-f.close()
-                                  
+
 if __name__ == '__main__':
     print(device)
     loss_list = []
     test_loss_list = []
     for epoch in range(1, args.epochs + 1):
+        t1 = time.time()
         loss = train(epoch)
         test_loss = test(epoch)
+        t2 = time.time()
 
         print('epoch [ {} / {} ], loss:{:.4f}, test_loss:{:.4f}'.format(epoch, args.epochs, loss, test_loss))
+        print('time / 1 epoch : {:.4f} sec, remaining time : {:.4f} min'.format(t2 - t1, (t2 - t1) * (args.epochs - epoch) / 60))
 
         loss_list.append(loss)
         test_loss_list.append(test_loss)
@@ -177,18 +196,19 @@ if __name__ == '__main__':
     # matplotlib
     loss_list = np.load('{}/loss_list.npy'.format(args.out))
     test_loss_list = np.load('{}/test_loss_list.npy'.format(args.out))
-    plt.plot(loss_list)
-    plt.plot(test_loss_list)
+    plt.plot(loss_list, label="train loss")
+    plt.plot(test_loss_list, label="test loss")
     plt.title('learning_curve')
+    plt.legend()
     plt.xlabel('epoch')
     plt.ylabel('loss')
     plt.grid()
     plt.show()
-
-    """device = torch.device('cpu')
+    """
+    device = torch.device('cpu')
     model = VAE()
     model.load_state_dict(torch.load('{}/cell_vae.pth'.format(args.out), map_location=device))
-    
+
     cell_testdata = datasets.ImageFolder(root=args.val, transform=data_transform)
     testdata_loader = torch.utils.data.DataLoader(cell_testdata, batch_size=len(testdata_loader.dataset), shuffle=False)
     images, labels = iter(testdata_loader).next()
@@ -199,12 +219,15 @@ if __name__ == '__main__':
         z = model.encode(Variable(images))
     mu, logvar = z
     mu, logvar = mu.data.numpy(), logvar.data.numpy()
-    print(mu.shape, logvar.shape)
-    plt.scatter(mu[:, 0], mu[:, 1], marker='.', c=labels.numpy(), cmap=pylab.cm.jet)
-        
+    # print(mu.shape, logvar.shape)
+
     plt.figure(figsize=(7, 7))
+    plt.scatter(mu[:, 0], mu[:, 1], marker='.', c=labels.numpy(), cmap=pylab.cm.jet, label=cell_list)# 凡例が入るか要確認
+    plt.legend()
     plt.title('Feature space')
     plt.xlim((-6, 6))
     plt.ylim((-6, 6))
     plt.grid()
-    plt.show()"""
+    plt.show()
+    """
+
