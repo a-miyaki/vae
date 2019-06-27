@@ -23,7 +23,8 @@ parser.add_argument('--batch_size', type=int, default=1, metavar='N')
 parser.add_argument('--epochs', type=int, default=1, metavar='N')
 parser.add_argument('----no_cuda', action='store_true', default=False)
 parser.add_argument('--data', default='./traindata')
-parser.add_argument('--out', default='./result_cell_image/result_20190625/review')
+parser.add_argument('--resume', default='./result_cell_image/result_20180626/cell_vae.pth')
+parser.add_argument('--out', default='./result_cell_image/result_20190626/review')
 args = parser.parse_args()
 
 args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -39,6 +40,7 @@ data_loader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size, s
 
 model = VAE().to(device)
 # train:cpu != test:gpu, and, train:gpu != test:cpu
+model.load_state_dict(torch.load(args.resume))
 
 def Image_generate(epoch):
     model.eval()
