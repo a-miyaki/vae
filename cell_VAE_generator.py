@@ -49,9 +49,9 @@ def Image_generate(epoch):
         recon_batch, _, _ = model(data)
         if epoch % == 0:
             if batch_idx == 0:
-            n = len(dataset)
-            comparison = torch.cat([data[:n], recon_batch.view(args.batch_size, 1, 140, 140)[:n]])
-            save_image(comparison.data.cpu(), args.out + label, nrow=1)
+                n = len(dataset)
+                comparison = torch.cat([data[:n], recon_batch.view(args.batch_size, 1, 140, 140)[:n]])
+                save_image(comparison.data.cpu(), args.out + label, nrow=1)
 
 if __name__ == '__main__':
     print(device)
