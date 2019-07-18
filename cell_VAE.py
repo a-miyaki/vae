@@ -15,6 +15,7 @@ from torch.nn import functional as F
 from torchvision import datasets, transforms
 from torchvision.utils import save_image
 
+from PIL import Image
 import matplotlib.pylab as plt
 
 
@@ -47,17 +48,6 @@ if not os.path.exists(args.out):
 torch.manual_seed(args.seed)
 device = torch.device("cuda" if args.cuda else "cpu")
 
-f = open(args.out + '/memo.txt', 'w')
-f.write(datetime.now().strftime("%Y/%m/%d  %H:%M:%S") + "\n"
-        "device : {}".format(device) + "\n"
-        "epoch : {}".format(args.epochs) + "\n"
-        "batch size : {}".format(args.batch_size) + "\n"
-        "latent dimensions : 50\n"
-        "image size : {} x {}".format(140, 140) + "\n"
-        "cells : {}, {}, {}".format("HEK293", "KYSE150", "MCF-7") + "\n"
-        "dataset : train;{}, test;{}".format(240, 160))
-f.close()
-
 kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else{}
 
 data_transform = transforms.Compose([transforms.Grayscale(), transforms.ToTensor()])
@@ -70,46 +60,68 @@ testdata_loader = torch.utils.data.DataLoader(cell_testdata, batch_size=args.bat
 
 cell_list = ('HEK293', 'KYSE150', 'MCF7')
 
+f = open(args.out + '/memo.txt', 'w')
+f.write(datetime.now().strftime("%Y/%m/%d  %H:%M:%S\n") +
+        "device : {}\n".format(device) +
+        "epoch : {}\n".format(args.epochs) +
+        "batch size : {}\n".format(args.batch_size) +
+        "latent dimensions : 256\n" +
+        "image size : {} x {}\n".format(256, 256) + 
+        "cells : {}\n".format(cell_list) +
+        "dataset : train;{}, test;{}".format(len(dataset_loader), len(testdata_loader)
+f.close()
 
 class VAE(nn.Module):
     def __init__(self):
         super(VAE, self).__init__()
 
-        self.conv1 = nn.Conv2d(in_channels=1, out_channels=32, kernel_size=3, stride=1, padding=0)
-        self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=1, padding=1)
-        self.conv3 = nn.Conv2d(in_channels=64, out_channels=32, kernel_size=3, stride=1, padding=1)
-        self.conv4 = nn.Conv2d(in_channels=32, out_channels=16, kernel_size=3, stride=1, padding=0)
+        self.conv1 = nn.Conv2d(in_channels=1, out_channels=32, kernel_size=3, stride=1, padding=1)
+        self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=1, padding=0)
+        self.conv3 = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=1)
+        self.conv4 = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=0)
+        self.conv5 = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=1)
+        self.conv6 = nn.Conv2d(in_channels=64, out_channels=32, kernel_size=3, stride=1, padding=0)
+        self.conv7 = nn.Conv2d(in_channels=32, out_channels=16, kernel_size=3, stride=1, padding=1)
         self.max_pool = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.fc1_mu = nn.Linear(68 * 68 * 16, 50)
-        self.fc1_logvar = nn.Linear(68 * 68 * 16, 50)
+        self.fc1_mu = nn.Linear(16 * 125 * 125, 256)
+        self.fc1_logvar = nn.Linear(16 * 125 * 125, 256)
 
-        self.fc2 = nn.Linear(50, 68 * 68 * 16)
+        self.fc2 = nn.Linear(256, 16 * 125 * 125)
         self.up_sample = nn.UpsamplingNearest2d(scale_factor=2)
-        self.conv5 = nn.ConvTranspose2d(16, 32, 3)
-        self.conv6 = nn.ConvTranspose2d(in_channels=32, out_channels=64, kernel_size=3, stride=1, padding=1)
-        self.conv7 = nn.ConvTranspose2d(in_channels=64, out_channels=32, kernel_size=3, stride=1, padding=1)
-        self.conv8 = nn.ConvTranspose2d(32, 1, 3)
+        self.deconv1 = nn.ConvTranspose2d(in_channels=16, out_channels=32, kernel_size=3, stride=1, padding=1)
+        self.deconv2 = nn.ConvTranspose2d(in_channels=32, out_channels=64, kernel_size=3, stride=1, padding=0)
+        self.deconv3 = nn.ConvTranspose2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=1)
+        self.deconv4 = nn.ConvTranspose2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=0)
+        self.deconv5 = nn.ConvTranspose2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=1)
+        self.deconv6 = nn.ConvTranspose2d(in_channels=64, out_channels=32, kernel_size=3, stride=1, padding=0)
+        self.deconv7 = nn.ConvTranspose2d(in_channels=32, out_channels=1, kernel_size=3, stride=1, padding=1)
 
     def encode(self, x):
         a1 = F.relu(self.conv1(x))
         a2 = F.relu(self.conv2(a1))
         a3 = F.relu(self.conv3(a2))
         a4 = F.relu(self.conv4(a3))
-        mx_poold = self.max_pool(a4)
-        a_reshaped = mx_poold.reshape(-1, 68 * 68 * 16)
+        a5 = F.relu(self.conv5(a4))
+        a6 = F.relu(self.conv6(a5))
+        a7 = F.relu(self.conv7(a6))
+        mx_poold = self.max_pool(a7)
+        a_reshaped = mx_poold.reshape(-1, 16 * 125 * 125)
         a_mu = self.fc1_mu(a_reshaped)
         a_logvar = self.fc1_logvar(a_reshaped)
         return a_mu, a_logvar
 
     def decode(self, z):
-        a5 = F.relu(self.fc2(z))
-        a5 = a5.reshape(-1, 16, 68, 68)
-        a5_upsample = self.up_sample(a5)
-        a6 = F.relu(self.conv5(a5_upsample))
-        a7 = F.relu(self.conv6(a6))
-        a8 = F.relu(self.conv7(a7))
-        a9 = torch.sigmoid(self.conv8(a8))
-        return a9
+        b1 = F.relu(self.fc2(z))
+        b1 = b1.reshape(-1, 16, 125, 125)
+        b1_upsample = self.up_sample(b1)
+        b2 = F.relu(self.deconv1(b1_upsample))
+        b3 = F.relu(self.deconv2(b2))
+        b4 = F.relu(self.deconv3(b3))
+        b5 = F.relu(self.deconv4(b4))
+        b6 = F.relu(self.deconv5(b5))
+        b7 = F.relu(self.deconv6(b6))
+        b8 = torch.sigmoid(self.deconv7(b7))
+        return b8
 
     def reparameterize(self, mu, logvar):
         std = torch.exp(0.5 * logvar)
@@ -128,7 +140,7 @@ optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
 # Reconstruction + KL divergence losses summed over all elements and batch
 def loss_function(recon_x, x, mu, logvar):
-    BCE = F.binary_cross_entropy(recon_x, x.view(-1, 19600), reduction='sum')
+    BCE = F.binary_cross_entropy(recon_x, x.view(-1, 256, 256), reduction='sum')
 
     # see Appendix B from VAE paper:
     # Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
@@ -165,7 +177,7 @@ def test(epoch):
             # 10エポックごとに最初のminibatchの入力画像と復元画像を保存
             if batch_idx == 0:
                 n = 8
-                comparison = torch.cat([data[:n], recon_batch.view(args.batch_size, 1, 140, 140)[:n]])
+                comparison = torch.cat([data[:n], recon_batch.view(args.batch_size, 1, 256, 256)[:n]])
                 save_image(comparison.data.cpu(),
                            '{}/reconstruction_{}.png'.format(args.out, epoch), nrow=n)
     test_loss /= len(testdata_loader.dataset)
