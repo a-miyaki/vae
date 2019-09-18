@@ -2,6 +2,7 @@ from __future__ import print_function
 import os
 import numpy as np
 import argparse
+import seaborn as sns
 
 import torch
 import torch.nn as nn
@@ -12,18 +13,19 @@ from torch.nn import functional as F
 from torchvision import datasets, transforms
 from torchvision.utils import save_image
 
-import pylab
+import matplotlib as mpl
 import matplotlib.pyplot as plt
+import pandas as pd
 
 
 parser = argparse.ArgumentParser(description='VAE MNIST Example')
 parser.add_argument('--batch_size', type=int, default=128, metavar='N',
                     help='input batch size for training (default=128)')
-parser.add_argument('--epochs', type=int, default=10, metavar='N',
+parser.add_argument('--epochs', type=int, default=100, metavar='N',
                     help='number of epochs to train (default: 10)')
 parser.add_argument('----no-cuda', action='store_true', default=False,
                     help='enables CUDA training')
-parser.add_argument('--out', '-o', default='./result_dir_190411',
+parser.add_argument('--out', '-o', default='./result_MNIST/0830_3D',
                     help='Directory to outout the reslut')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
@@ -61,10 +63,10 @@ class VAE(nn.Module):
         super(VAE, self).__init__()
 
         self.fc1 = nn.Linear(784, 512)
-        self.fc21 = nn.Linear(512, 2)  # mu(平均ベクトル)
-        self.fc22 = nn.Linear(512, 2)  # logvar(分散共分散行列の対数)
+        self.fc21 = nn.Linear(512, 20)  # mu(平均ベクトル)
+        self.fc22 = nn.Linear(512, 20)  # logvar(分散共分散行列の対数)
 
-        self.fc3 = nn.Linear(2, 512)
+        self.fc3 = nn.Linear(20, 512)
         self.fc4 = nn.Linear(512, 784)
 
         self.relu = nn.ReLU()
@@ -95,6 +97,7 @@ class VAE(nn.Module):
 model = VAE().to(device)
 optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
+
 def loss_function(recon_x, x, mu, logvar):
     # size_average=Falseなのでバッチ内のサンプルの合計lossを求める
     # reconstruction loss 入力画像をどのくらい正確に復元できたか？
@@ -119,13 +122,6 @@ def train(epoch):
         loss.backward()
         train_loss += loss.item()
         optimizer.step()
-        """
-        if batch_idx % args.log_interval == 0:
-            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                epoch, batch_idx * len(data), len(train_loader.dataset),
-                100. * batch_idx / len(train_loader),
-                loss.item() / len(data)))
-                """
 
     # loss_function() は平均ではなく全サンプルの合計lossを返すのでサンプル数で割る
     train_loss /= len(train_loader.dataset)
@@ -196,15 +192,59 @@ if __name__ == '__main__':
     images = images.view(10000, -1)
 
     # 784次元ベクトルを2次元ベクトルにencode
-    z = model.encode(Variable(images, volatile=True))
+    with torch.no_grad():
+        z = model.encode(Variable(images))
     mu, logvar = z
     mu, logvar = mu.data.numpy(), logvar.data.numpy()
-    print(mu.shape, logvar.shape)
+    np.savetxt(args.out + '/mu.csv', mu, delimiter=',')
+    np.savetxt(args.out + '/label.csv', labels, delimiter=',')
 
-    plt.figure(figsize=(10, 10))
-    plt.scatter(mu[:, 0], mu[:, 1], marker='.', c=labels.numpy(), cmap=pylab.cm.jet)
-    plt.colorbar()
-    plt.xlim((-6, 6))
-    plt.ylim((-6, 6))
-    plt.grid()
-    plt.show()
+    data1 = pd.read_csv(args.out + '/mu.csv', header=None, dtype=np.float64)
+    data1.columns = ["C" + str(i) for i in range(1, len(data1.columns) + 1)]
+    data2 = pd.read_csv(args.out + '/label.csv', header=None, dtype=np.int64)
+    data2.columns = ["C0"]
+    data = pd.concat([data2, data1], axis=1)
+
+    fea_0 = data[data['C0'] == 0].drop('C0', axis=1)
+    fea_1 = data[data['C0'] == 1].drop('C0', axis=1)
+    fea_2 = data[data['C0'] == 2].drop('C0', axis=1)
+    fea_3 = data[data['C0'] == 3].drop('C0', axis=1)
+    fea_4 = data[data['C0'] == 4].drop('C0', axis=1)
+    fea_5 = data[data['C0'] == 5].drop('C0', axis=1)
+    fea_6 = data[data['C0'] == 6].drop('C0', axis=1)
+    fea_7 = data[data['C0'] == 7].drop('C0', axis=1)
+    fea_8 = data[data['C0'] == 8].drop('C0', axis=1)
+    fea_9 = data[data['C0'] == 9].drop('C0', axis=1)
+    # print(fea_1)
+
+
+    def calc_corr(data1, data2, i, j):
+
+        list = []
+        
+        for i in range(min(len(data1), len(data2))):
+            np.random.seed(i)
+            n = np.random.randint(0, min(len(data1), len(data2)))
+            s0 = pd.Series(data1.iloc[n, :])
+            np.random.seed(j)
+            n = np.random.randint(0, min(len(data1), len(data2)))
+            s1 = pd.Series(data2.iloc[n, :])
+
+            res = s0.corr(s1)
+            list.append(res)
+
+        # print("{}vs{} : {}".format(i, j, np.average(list)))
+        return np.average(list)
+
+    data_list = [fea_0, fea_1, fea_2, fea_3, fea_4, fea_5, fea_6, fea_7, fea_8, fea_9]
+    corr_list = []
+    for i in range(0, 10):
+        for j in range(0, 10):
+            corr = calc_corr(data_list[i], data_list[j], i, j)
+            corr_list.append(corr)
+
+    print(np.reshape(corr_list, (10, 10)))
+    plt.figure()
+    sns.heatmap(np.reshape(corr_list, (10, 10)))
+    plt.savefig(args.out + '/heat_map.png')
+    plt.close('all')
