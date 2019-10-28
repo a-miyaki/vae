@@ -49,7 +49,7 @@ class make_dataset(Dataset):
         return self.dataset[i][0][:, y_l:y_r, x_l:x_r], self.dataset[i][1]
 
 
-class VAEGAN(nn.Module):
+class VAE(nn.Module):
 	def __init__(self, in_ch=3, out_ch=3, z_size=256, kn=3, p=1, s=1):
 		super(VAEGAN, self).__init__()
 		encoder_list = []
@@ -100,6 +100,10 @@ class VAEGAN(nn.Module):
 		return ten, mu, logvar, ten_dis
 
 
+class GAN(nn.Module):
+	
+
+
 model = VAEGAN()
 optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
@@ -114,7 +118,15 @@ def loss_function(ten, ten_original, mu, logvar):
 	return BCE + KLD
 
 
+def dis_loss_function(fake, real, target,
+
+
 def train(epoch):
 	model.train()
 	train_loss = 0
-	for batcg_idx, (data, _) in enumerate(
+	for batcg_idx, (data, _) in enumerate(train_loader):
+		data = data.to(device)
+		optimizer.zero_grad()
+		ten, mu, logvar, ten_dis = model(data)
+		loss = loss_function(ten, data, mu, logvar)
+		
