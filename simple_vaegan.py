@@ -19,7 +19,7 @@ parser.add_argument('--batch_size', type=int, default=1)
 parser.add_argument('--epochs' type=int, default=100)
 parser.add_argument('--no_cuda', action='store_true', default=False)
 parser.add_argument('--dataset', default='./traindata')
-parser.add_argument('--out', default='./{}'.format(datetime.now().strftime("%Y%m%d")
+parser.add_argument('--out', default='./{}'.format(datetime.now().strftime("%Y%m%d")))
 parser.add_argument('--seed', type=int, default=1)
 args.parser.parse_args()
 
@@ -72,11 +72,10 @@ class VAE(nn.Module):
 		self.fc2 = nn.Linear(in_features=z_size, out_features=1024)
 		self.fc3 = nn.Linear(in_features=1024, out_features=256*256*256)
 		decoder_list = []
-		decoder_list.append(nn.ConvTranspose2d(in_channels=256, out_channels=128, kernel_size=kn, padding=p, stride=s)
-		decoder_list.append(nn.ConvTranspose2d(in_channels=128, out_channels=64, kernel_size=kn, padding=p, stride=s)
-		decoder_list.append(nn.ConvTranspose2d(in_channels=64, out_channels=in_ch, kernel_size=kn, padding=p, stride=s)
+		decoder_list.append(nn.ConvTranspose2d(in_channels=256, out_channels=128, kernel_size=kn, padding=p, stride=s))
+		decoder_list.append(nn.ConvTranspose2d(in_channels=128, out_channels=64, kernel_size=kn, padding=p, stride=s))
+		decoder_list.append(nn.ConvTranspose2d(in_channels=64, out_channels=in_ch, kernel_size=kn, padding=p, stride=s))
 		self.deconv = nn.Sequential(*decoder_list)
-		
 		
 	def forward(self, ten):
 		ten_original = ten
@@ -99,9 +98,9 @@ class GAN(nn.Module):
 		super(GAN, self).__init__()
 		disc_list = []
 		self.fc4 = (nn.Sequential(nn.Conv2d(in_channels=in_ch, out_channles=32, kernel_size=kn, padding=p, stride=s),
-										nn.ReLU(Ture))
-		disc_list.append(nn.Conv2d(in_channels=64, out_channels=128, kernel_size=4, padding=p, stride=2)
-		disc_list.append(nn.Conv2d(in_channles=128, out_channels=256, kernel_size=4, padding=p, stride=2)
+										nn.ReLU(Ture)))
+		disc_list.append(nn.Conv2d(in_channels=64, out_channels=128, kernel_size=4, padding=p, stride=2))
+		disc_list.append(nn.Conv2d(in_channles=128, out_channels=256, kernel_size=4, padding=p, stride=2))
 		self.disconv = nn.Sequential(*disc_list)
 		self.fc5 = nn.Sequential(nn.Linear(in_features=64*64*256, out_features=512),
 								nn.ReLU(True),
@@ -120,8 +119,8 @@ dis = GAN()
 dis_optimizer = optim.Adam(dis.parameters(), lr=1e-3)
 
 cell_list = os.listdir(args.dataset)
-train_loader = make_dataset(args.dataset, cell_list, range=(1, 100)
-test_loader = make_dataset(args.dataset, cell_list range(100, 140)
+train_loader = make_dataset(args.dataset, cell_list, range=(1, 100))
+test_loader = make_dataset(args.dataset, cell_list range(100, 140))
 
 
 def loss_function(ten, ten_original, mu, logvar):
@@ -130,7 +129,7 @@ def loss_function(ten, ten_original, mu, logvar):
 	return BCE + KLD
 
 
-def dis_loss_function(fake, real, target, data_size=(256, 256))
+def dis_loss_function(fake, real, target, data_size=(256, 256)):
 	y_in = dis(real, target)
 	y_out = dis(fake, target)
 	L1 = torch.sum(nn.softmax(-y_in)) / args.batch_size / data_size[0] / data_size[1]
