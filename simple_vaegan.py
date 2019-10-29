@@ -93,6 +93,7 @@ class VAE(nn.Module):
 		return ten, mu, logvar, ten_dis
 
 
+
 class GAN(nn.Module):
 	def __init__(self, in_ch=3, out_ch=3, z_size=256, kn=3, p=1, s=1):
 		super(GAN, self).__init__()
@@ -111,6 +112,13 @@ class GAN(nn.Module):
 		ten_dis = self.disconv(ten_dis)
 		ten_dis = self.fc5(ten_dis)
 		return ten_dis
+
+
+def loss_record(file_name, epoch, loss, dis_loss):
+	f = open(file_name, 'a')
+	writer = csv.writer(f)
+	writer.writerow([epoch, loss, dis_loss])
+	f.close()
 
 
 model = VAE()
@@ -175,15 +183,21 @@ def test(epoch):
 
 def main():
 	print("device : {}".format(device))
-	train_loss_list = []
-	train_dis_loss_list = []
 	for epoch in range(1, args.epochs + 1):
 		t1 = time.time()
 		tr_loss, tr_dis_loss = train(epoch)
 		te_loss, te_dis_loss = test(epoch)
+		loss_record('{}/train_loss.csv'.format(args.out), epoch, tr_loss, tr_dis_loss)
+		loss_record('{}/test_loss.csv'.format(args.out), epoch, te_loss, te_dis_loss)
 		t2 = time.time()
 		print('epoch [{} / {}], train loss : {:.4f}, trian discriminator loss : {:.4f}'.format(epoch, args.epochs, tr_loss, tr_dis_loss))
 		print('                 test loss  : {:.4f}, test discriminator loss  : {:.4f}'.format(te_loss, te_dis_loss))
 		print('time / 1 epoch : {:.4f} sec, remaining time : {:.4f} min'.format(t2 - t1, (t2 - t1) * (args.epochs - epoch + 1) / 60))
-		train_loss_list.append(tr_loss, tr_dis_loss)
-		
+		if epoch % 10 == 0:
+			torch.save(model.state_dict(), '{}/cell_vaegan_epoch_{}.pth'.format(args.out, epoch))
+	torch.save(model.state_dict(), '{}/cell_vaegan.pth'.format(args.out))
+	print(' Cell VAEGAN was finished ')
+
+
+if __name__ == '__main__':
+	main()
