@@ -1,14 +1,12 @@
 # vae
-vae script used by pytorch==1.0.0
+vae script used by pytorch==1.0.4
 
 2019/04/15
 data:MNIST
 VAE
 pick up MNIST characterization
 
-I'll try:
-my dataset,
-z = 20,multivariate analyze
+I don't complet deback about simple_vaegan.py
 
 
 # Reference
