@@ -221,7 +221,7 @@ if __name__ == '__main__':
     def calc_corr(data1, data2, i, j):
 
         list = []
-        
+
         for i in range(min(len(data1), len(data2))):
             np.random.seed(i)
             n = np.random.randint(0, min(len(data1), len(data2)))
@@ -248,3 +248,5 @@ if __name__ == '__main__':
     sns.heatmap(np.reshape(corr_list, (10, 10)))
     plt.savefig(args.out + '/heat_map.png')
     plt.close('all')
+
+
